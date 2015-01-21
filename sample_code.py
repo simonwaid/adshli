@@ -1,6 +1,7 @@
 from adshli.connection import ads_connection
 import adshli.protocol as adsprotocol 
-from adshli.hli import ads_device, ads_variable, idx_grp
+from adshli.hli import ads_device, ads_var_single, idx_grp, ads_var_group
+import time
 
 plc_ams_id="10.23.23.57.1.1"
 plc_ams_port=851
@@ -11,9 +12,9 @@ pc_ams_port=801
 timeout=5
 var_name='Main.I_b_SafeState'
 var_type='?'
-#var_name='GVL.fb_maps.Height'
-#var_type='100f'
-
+var_name_array='GVL.fb_maps.Height'
+var_type_array='10000f'
+var_shape_array=(100,100)
 
 def main():
     # *** Reading and writing variables using the low level interface
@@ -36,12 +37,13 @@ def main():
     handle= connection.execute_cmd(cmd)['data'][0]
     #Read the variable
     cmd=adsprotocol.ads_cmd_read(idx_grp['SYM_VALBYHND'], handle, var_type)
-    var_content=connection.execute_cmd(cmd)['data'][0]
+    var_content=connection.execute_cmd(cmd)['data']
     print 'Variable contents: ',  var_content
     #Write back the variable
     cmd=adsprotocol.ads_cmd_write(idx_grp['SYM_VALBYHND'], handle, var_type, var_content)
     connection.execute_cmd(cmd)
     connection.close()
+    
     # ***************************************************
     # *** Do the same using the high level interface
     # Open the connection
@@ -53,13 +55,34 @@ def main():
     print 'Device name: ', device.device_name
     print 'ADS state: ', device.ads_state
     print 'Device state: ', device.device_state
-    #Accessing the variable: First instanciate, then read and write back 
-    variable=ads_variable(connection, var_name, var_type)
+    #Accessing the variable: First instanciate, then read and write back
+    variable=ads_var_single(connection, var_name, var_type)
     variable_content=variable.read()
     print 'Variable content: ', variable_content
     variable.write(variable_content)
-    connection.close()
-
+    # Now read an array 
+    array_var=ads_var_single(connection, var_name_array, var_type_array, shape=var_shape_array)
+    start_time=time.time()
+    variable_content=array_var.read()
+    print 'Time required for reading: ',  time.time()-start_time
+    print 'Variable content: ', variable_content
+    start_time=time.time()
+    array_var.write(variable_content)
+    print 'Time required for writing: ',  time.time()-start_time
+    # Test variable group
+    print 'Now accessing the PLC using a variable group'
+    var_grp=ads_var_group()
+    # Setting all variables
+    var_bool=var_grp.add_variable(var_name, var_type)
+    var_arr=var_grp.add_variable(var_name_array, var_type_array, shape=var_shape_array)
+    #Connecting
+    var_grp.connect(connection)
+    #Read everithing
+    var_grp.read()
+    print 'Variable content: ', var_bool.value
+    print 'Variable content: ', var_arr.value
+    var_grp.write()
+    
 
 if __name__ == '__main__':
     main()

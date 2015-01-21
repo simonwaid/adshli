@@ -13,6 +13,11 @@
 #License along with this library.
 
 import protocol
+#Numpy is only needed for arrays so 
+try:
+    import numpy as np
+except:
+    pass
 
 idx_grp={'SYMTAB': 0xF000, \
          'SYMNAME': 0xF001 , \
@@ -60,16 +65,46 @@ class ads_device:
         retval=self.ads_connection.execute_cmd(cmd)
         self.ads_state=retval['ads_state']
         self.device_state=retval['dev_state']
-        
-class ads_variable:
-    '''Provides a high level interface for accessing PLC variables via ADS'''    
-    def __init__(self, ads_connection, var_name, var_type):
-        '''Save variable details and get a handle in the PLC'''
-        self._ads_connection=ads_connection
+
+class ads_var():
+    '''Class to store information on '''
+    def __init__(self, var_name, var_type, shape=None):
+        '''Save variable details and get a handle in the PLC. In case of an array you have to provide its shape for correct interpretation of the data'''
+        self._shape=shape
         self._var_name=var_name
         self._var_type=var_type
-        self._get_handle()
+        self.value=None
+
+    def _expand_array(self, value):
+        '''Checks if the data is an array and reshapes it'''
+        if not self._shape==None:
+            value=np.reshape(value, self._shape, order='C')
+        return value
+    
+    def _linearize_array(self, data):
+        '''Linearizes an array to fit into the memory of the PLC'''
+        if not self._shape==None:
+            data=np.reshape(data, -1, order='C')
+        return data
+    
+class ads_var_single(ads_var):
+    '''Provides a high level interface for accessing PLC variables via ADS'''    
+    def __init__(self, ads_connection, var_name, var_type, shape=None):
+        '''Save variable details and get a handle in the PLC. In case of an array you have to provide its shape for correct interpretation of the data'''
+        ads_var.__init__(self, var_name, var_type, shape)
+        if not ads_connection==None:
+            self.connect(ads_connection)
         
+    def connect(self,ads_connection):
+        '''Sets the connection to the plc'''
+        # If we have a handle release it
+        try:
+            self._release_handle()
+        except:
+            pass
+        self._ads_connection=ads_connection
+        self._get_handle()
+    
     def _get_handle(self):
         '''Get a handle for the variable'''
         cmd=protocol.ads_cmd_read_write(idx_grp['SYM_HNDBYNAME'], 0x0, 'L',  self._var_name)
@@ -78,11 +113,13 @@ class ads_variable:
     def read(self):
         '''Read the variable content from the PLC memory'''
         cmd=protocol.ads_cmd_read(idx_grp['SYM_VALBYHND'], self._handle, self._var_type)
-        var_content=self._ads_connection.execute_cmd(cmd)['data'][0]
-        return var_content
+        var_content=self._ads_connection.execute_cmd(cmd)['data']
+        self.value=self._expand_array(var_content)
+        return self.value
     
     def write(self, data):
         '''Write the provided data to the PLC'''
+        data=self._linearize_array(data)
         cmd=protocol.ads_cmd_write(idx_grp['SYM_VALBYHND'], self._handle, self._var_type, data)
         self._ads_connection.execute_cmd(cmd)
         
@@ -91,7 +128,31 @@ class ads_variable:
         cmd=protocol.ads_cmd_write(idx_grp['SYM_RELEASEHND'], 0x0, 'L', self._handle)
         self._ads_connection.execute_cmd(cmd)
         self._handle=None
-    
-    def __del__(self):
-        pass
-        #self._release_handle()
+
+class ads_var_group:
+    '''Groups multiple variables for collective reading and writing'''
+    # TODO: Implement multicommand ads access
+    def __init__(self):
+        self.plc_variables=[]
+        self.ads_connection=None
+        
+    def add_variable(self, var_name, var_type, shape=None):
+        '''Add a variable to the group. Returns an object to allow reading/writing the variable value'''
+        variable=ads_var_single(self.ads_connection, var_name, var_type, shape=shape)
+        self.plc_variables.append(variable)
+        return variable
+        
+    def connect(self, plc_connection):
+        '''Call this after all variables have been added'''
+        for variable in self.plc_variables:
+            variable.connect(plc_connection)
+        
+    def read(self):
+        '''Reads all variables in the group'''
+        for variable in self.plc_variables:
+            variable.read()
+            
+    def write(self):
+        '''Writes all variables in the group'''
+        for variable in self.plc_variables:
+            variable.write(variable.value)
