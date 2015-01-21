@@ -13,6 +13,8 @@ See "sample_code.py" for an example on how to use the client.
 Installation
 ------------
 
+Run python setup.py install
+
 Notes
 -----
 
