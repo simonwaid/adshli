@@ -70,20 +70,20 @@ class ads_var():
     '''Class to store information on '''
     def __init__(self, var_name, var_type, shape=None):
         '''Save variable details and get a handle in the PLC. In case of an array you have to provide its shape for correct interpretation of the data'''
-        self._shape=shape
+        self.shape=shape
         self._var_name=var_name
         self._var_type=var_type
         self.value=None
 
     def _expand_array(self, value):
         '''Checks if the data is an array and reshapes it'''
-        if not self._shape==None:
-            value=np.reshape(value, self._shape, order='C')
+        if not self.shape==None:
+            value=np.reshape(value, self.shape, order='C')
         return value
     
     def _linearize_array(self, data):
         '''Linearizes an array to fit into the memory of the PLC'''
-        if not self._shape==None:
+        if not self.shape==None:
             data=np.reshape(data, -1, order='C')
         return data
     
@@ -107,14 +107,23 @@ class ads_var_single(ads_var):
     
     def _get_handle(self):
         '''Get a handle for the variable'''
-        cmd=protocol.ads_cmd_read_write(idx_grp['SYM_HNDBYNAME'], 0x0, 'L',  self._var_name)
-        self._handle=self._ads_connection.execute_cmd(cmd)['data'][0]
-    
+        try:
+            cmd=protocol.ads_cmd_read_write(idx_grp['SYM_HNDBYNAME'], 0x0, 'L',  self._var_name)
+            self._handle=self._ads_connection.execute_cmd(cmd)['data'][0]
+        except:
+            print 'Getting handle failed'
+            print 'Variable name: ', self.var_name
+            raise
+        
     def read(self):
         '''Read the variable content from the PLC memory'''
         cmd=protocol.ads_cmd_read(idx_grp['SYM_VALBYHND'], self._handle, self._var_type)
         var_content=self._ads_connection.execute_cmd(cmd)['data']
-        self.value=self._expand_array(var_content)
+        if len(var_content)==1:
+            self.value=self._expand_array(var_content)[0]
+        else:
+            self.value=self._expand_array(var_content)
+        return self.value
         return self.value
     
     def write(self, data):

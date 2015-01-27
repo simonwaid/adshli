@@ -190,7 +190,10 @@ class ads_cmd_write(_ads_packet):
         lenght=struct.calcsize('<'+data_type) # Compute the size of the data to read in PLC memory
         payload=struct.pack('<LLL',idx_grp, idx_offset,  lenght) # Assemble the payload to be send to the plc
         self.payload.extend(payload) # Save the payload 
-        self.payload.extend(struct.pack('<'+data_type, *data))
+        try:
+            self.payload.extend(struct.pack('<'+data_type, data))
+        except:
+            self.payload.extend(struct.pack('<'+data_type, *data))
         
     def decode_response(self, response):
         '''Decode the returned response '''

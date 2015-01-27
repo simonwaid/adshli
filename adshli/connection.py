@@ -38,7 +38,6 @@ class ads_connection:
         self.socket.send(packet)
         # Read first part of response (heasder + some data)
         packet_size=1024
-        read_lenght=packet_size
         try:
             response=self.socket.recv(packet_size)
         except:
@@ -47,8 +46,8 @@ class ads_connection:
         # Decode header
         header_data, payload=ads_cmd.decode_header(response)
         # Fetch residual data
-        while header_data['ams_packet_lenght']+6 > read_lenght:
-            read_lenght+=packet_size
+        while header_data['ams_packet_lenght']+6 > len(response):
+            #read_lenght+=packet_size
             response+=self.socket.recv(packet_size)
         # Increase invoke id. Note: Currently this is not used.  
         self.invoke_id+=1
