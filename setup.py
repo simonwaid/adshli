@@ -4,7 +4,7 @@
 from distutils.core import setup
 
 setup(name='ADSHLI',
-      version='0.1',
+      version='0.3',
       description='A high level client for the Twincat ADS/AMS protocol',
       author='Simon Waid',
       author_email='simon_waid@gmx.net',

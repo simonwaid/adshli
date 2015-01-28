@@ -12,8 +12,14 @@ pc_ams_port=801
 timeout=5
 var_name='Main.I_b_SafeState'
 var_type='?'
+var_fail_n=' Main.I_b_SafeState'
+var_fail_t='?'
 var_name_array='GVL.fb_maps.Height'
 var_type_array='10000f'
+var_name1='GVL.fb_Gripper.fb_Sen_Mass.Var_real_pysical_Value'
+var_type1='f'
+
+
 var_shape_array=(100,100)
 
 def main():
@@ -78,10 +84,14 @@ def main():
     #Connecting
     var_grp.connect(connection)
     #Read everithing
+    start_time=time.time()
     var_grp.read()
+    print 'Time required for reading: ',  time.time()-start_time
     print 'Variable content: ', var_bool.value
     print 'Variable content: ', var_arr.value
+    start_time=time.time()
     var_grp.write()
+    print 'Time required for writing: ',  time.time()-start_time
     
 
 if __name__ == '__main__':
