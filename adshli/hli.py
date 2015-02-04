@@ -144,7 +144,12 @@ class ads_var_group:
             if variable.handle!=None:
                 variable._release_handle()
             cmd.add_var(idx_grp['SYM_HNDBYNAME'], 0x0, 'L', variable.var_name)
+        #try:
         results=self.ads_connection.execute_cmd(cmd)
+        #except:
+        #    for variable in self.plc_variables:
+        #        print 'Variable name', variable.var_name
+        #    raise
         for i in range(len(self.plc_variables)):
             self.plc_variables[i].handle=results[i]['data'][0]
         
@@ -152,6 +157,8 @@ class ads_var_group:
         '''Reads all variables in the group'''
         cmd=protocol.ads_sum_cmd_read()
         for variable in self.plc_variables:
+            if variable.handle == None:
+                raise RuntimeError('found no handle for variable')
             cmd.add_var(idx_grp['SYM_VALBYHND'], variable.handle, variable.var_type)
         results=self.ads_connection.execute_cmd(cmd)
         for i in range(len(self.plc_variables)):
@@ -165,6 +172,8 @@ class ads_var_group:
         '''Writes all variables in the group'''
         cmd=protocol.ads_sum_cmd_write()
         for variable in self.plc_variables:
+            if variable.handle == None:
+                raise RuntimeError('found no handle for variable')
             cmd.add_var(idx_grp['SYM_VALBYHND'], variable.handle, variable.var_type, variable.value)
         results=self.ads_connection.execute_cmd(cmd)
 

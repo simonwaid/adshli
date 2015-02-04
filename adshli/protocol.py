@@ -92,6 +92,7 @@ class _ads_packet:
     def _print_data(self, data):
         '''Prints binary data for debugging purposes'''
         print ":".join("{:02x}".format(ord(c)) for c in data)
+        print data
         try:
             print "Length: %d" %(data.buffer_info()[1])
         except:
