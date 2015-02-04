@@ -36,10 +36,12 @@ class ads_connection:
         packet=ads_cmd.get_packet(self.invoke_id, self)
         #print packet
         self.socket.send(packet)
-        # Read first part of response (heasder + some data)
+        # Read first part of response (header + some data)
         packet_size=1024
+        response=''
         try:
-            response=self.socket.recv(packet_size)
+            while len(response) < 38:
+                response+=self.socket.recv(packet_size)
         except:
             print 'No response received from PLC'
             raise
