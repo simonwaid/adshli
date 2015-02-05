@@ -36,26 +36,45 @@ class ads_connection:
         packet=ads_cmd.get_packet(self.invoke_id, self)
         #print packet
         self.socket.send(packet)
-        # Read first part of response (header + some data)
-        packet_size=1024
-        response=''
-        try:
-            while len(response) < 38:
-                response+=self.socket.recv(packet_size)
-        except:
-            print 'No response received from PLC'
-            raise
-        # Decode header
-        header_data, payload=ads_cmd.decode_header(response)
-        # Fetch residual data
-        while header_data['ams_packet_lenght']+6 > len(response):
-            #read_lenght+=packet_size
-            response+=self.socket.recv(packet_size)
-        # Increase invoke id. Note: Currently this is not used.  
+        #packet_size=1024
+        total_header_size=38
+        ams_header_size=32
+        # If something goes wrong me might miss a packet (misguided ?!) . In that case wait for the correct one
+        invoke_id=-1
+        while invoke_id<self.invoke_id:
+            #print invoke_id
+            # Read first part of response (header + some data)
+            response=''
+            try:
+                while len(response) < total_header_size:
+                    response+=self.socket.recv(total_header_size-len(response))
+            except:
+                print 'No response received from PLC'
+                raise
+            # Decode header
+            header_data, payload=ads_cmd.decode_header(response)
+            # Fetch residual data
+            while header_data['ams_packet_lenght']+total_header_size-ams_header_size > len(response):
+                #read_lenght+=packet_size
+                response+=self.socket.recv(header_data['ams_packet_lenght']-ams_header_size)
+            invoke_id=header_data['invoke_id']
+            
+        # Sometimes packets are misguided. If the port does not match reject it.
+        if self.ams_port_source != header_data['target_port']: 
+            result= None
+        else:
+            try:
+                # Decode packet
+                result=ads_cmd.decode_response(response)
+            except:
+                ads_cmd._print_decoded_header(response)
+                raise
+            
+        # Increase invoke id.  
         self.invoke_id+=1
         if self.invoke_id > 2**30:
             self.invoke_id
-        # Decode packet 
-        result=ads_cmd.decode_response(response)
+            
+        
         return result
         

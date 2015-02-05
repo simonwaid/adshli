@@ -154,20 +154,27 @@ class ads_var_group:
             self.plc_variables[i].handle=results[i]['data'][0]
         
     def read(self):
-        '''Reads all variables in the group'''
+        '''Reads all variables in the group. Returns True in case of success'''
         cmd=protocol.ads_sum_cmd_read()
         for variable in self.plc_variables:
             if variable.handle == None:
                 raise RuntimeError('found no handle for variable')
             cmd.add_var(idx_grp['SYM_VALBYHND'], variable.handle, variable.var_type)
         results=self.ads_connection.execute_cmd(cmd)
-        for i in range(len(self.plc_variables)):
-            var_content=results[i]['data']
-            if len(var_content)==1:
-                self.plc_variables[i].value=var_content[0]
-            else:
-                self.plc_variables[i].value=var_content
-                
+        # If we get a misguided packet (or similar in the future) the result is none.
+        # In that case we ignore the result and return false to let
+        # the user application do the error handling
+        if results!= None:
+            for i in range(len(self.plc_variables)):
+                var_content=results[i]['data']
+                if len(var_content)==1:
+                    self.plc_variables[i].value=var_content[0]
+                else:
+                    self.plc_variables[i].value=var_content
+        else:
+            return False
+        return True
+    
     def write(self):
         '''Writes all variables in the group'''
         cmd=protocol.ads_sum_cmd_write()
