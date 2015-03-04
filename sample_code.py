@@ -7,7 +7,7 @@ plc_ams_id="10.23.23.57.1.1"
 plc_ams_port=851
 plc_ip_adr="127.0.0.1"
 plc_ip_port=48898
-pc_ams_id="10.23.23.57.1.5"
+pc_ams_id="10.23.23.57.1.12"
 pc_ams_port=801
 timeout=5
 var_name='Main.I_b_SafeState'
@@ -15,12 +15,12 @@ var_type='?'
 var_fail_n=' Main.I_b_SafeState'
 var_fail_t='?'
 var_name_array='GVL.fb_maps.Height'
-var_type_array='10000f'
+var_type_array='625f'
 var_name1='GVL.fb_Gripper.fb_Sen_Mass.Var_real_pysical_Value'
 var_type1='f'
 
 
-var_shape_array=(100,100)
+var_shape_array=(25,25)
 
 def main():
     # *** Reading and writing variables using the low level interface

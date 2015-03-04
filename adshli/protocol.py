@@ -25,6 +25,7 @@ cmd_codes= {'read_dev_info':1, 'read':2, 'write':3,  'read_state':4, 'write_cont
                 'del_dev_notification':7,  'dev_notification':8, 'read_write':9}
 
 state_flags= {'command_request':0x04}
+header_size=38
 
 idx_grp={'SYMTAB': 0xF000, \
          'SYMNAME': 0xF001 , \
@@ -57,53 +58,53 @@ idx_grp={'SYMTAB': 0xF000, \
          'SUM_CMD_RW': 0xf082}
 
 
+def decode_ads_header(response):
+    '''Decodes the header of the provided (partial) response. Returns a dictionary with header data and the remaining payload'''
+    try:
+        ams_tcp_header=struct.unpack('<HL', response[0:6]) # ams_tcp header
+        tartget_id=struct.unpack('<6B', response[6:12])
+        target_port=struct.unpack('<H', response[12:14]) # ams header
+        source_id=struct.unpack('<6B', response[14:20])
+        source_port=struct.unpack('<H', response[20:22])
+        dec_header=struct.unpack('<HHLLL', response[22:38])
+    except:
+        print "Decoding of header failed"
+        print _print_data(response[0:32])
+        raise
+    result={'target_id': '%d.%d.%d.%d.%d.%d' %(tartget_id[0], tartget_id[1], tartget_id[2], tartget_id[3], tartget_id[4], tartget_id[5]), \
+            'target_port':      target_port[0], \
+            'source_id': '%d.%d.%d.%d.%d.%d' %(source_id[0], source_id[1], source_id[2], source_id[3], source_id[4], source_id[5]), \
+            'source_port':          source_port[0], \
+            'command_id':           dec_header[0],\
+            'state_flags':          dec_header[1], \
+            'ams_tcp_reserved':     ams_tcp_header[0], \
+            'ams_packet_lenght':   ams_tcp_header[1], \
+            'payload_lenght':          dec_header[2], \
+            'error_code':           dec_header[3], \
+            'invoke_id':            dec_header[4]}
+    return result, response[38:]
 
+def _print_data( data):
+    '''Prints binary data for debugging purposes'''
+    print ":".join("{:02x}".format(ord(c)) for c in data)
+    print data
+    try:
+        print "Length: %d" %(data.buffer_info()[1])
+    except:
+        try:
+            print "Length: %d" %(len(data))
+        except:
+            pass
+
+
+def _print_decoded_header( data):
+    '''Decodes the provided header and prints it for debugging purposes'''
+    print decode_ads_header(data)
+        
 class _ads_packet:
     '''This class provides common packet assembly functionality for the more specific packet assembly classes'''
     def __init__(self):
         pass
-    
-    def decode_header(self, response):
-        '''Decodes the header of the provided (partial) response. Returns a dictionary with header data and the remaining payload'''
-        try:
-            ams_tcp_header=struct.unpack('<HL', response[0:6]) # ams_tcp header
-            tartget_id=struct.unpack('<6B', response[6:12])
-            target_port=struct.unpack('<H', response[12:14]) # ams header
-            source_id=struct.unpack('<6B', response[14:20])
-            source_port=struct.unpack('<H', response[20:22])
-            dec_header=struct.unpack('<HHLLL', response[22:38])
-        except:
-            print "Decoding of header failed"
-            print self._print_data(response[0:32])
-            raise
-        result={'target_id': '%d.%d.%d.%d.%d.%d' %(tartget_id[0], tartget_id[1], tartget_id[2], tartget_id[3], tartget_id[4], tartget_id[5]), \
-                'target_port':      target_port[0], \
-                'source_id': '%d.%d.%d.%d.%d.%d' %(source_id[0], source_id[1], source_id[2], source_id[3], source_id[4], source_id[5]), \
-                'source_port':          source_port[0], \
-                'command_id':           dec_header[0],\
-                'state_flags':          dec_header[1], \
-                'ams_tcp_reserved':     ams_tcp_header[0], \
-                'ams_packet_lenght':   ams_tcp_header[1], \
-                'payload_lenght':          dec_header[2], \
-                'error_code':           dec_header[3], \
-                'invoke_id':            dec_header[4]}
-        return result, response[38:]
-    
-    def _print_data(self, data):
-        '''Prints binary data for debugging purposes'''
-        print ":".join("{:02x}".format(ord(c)) for c in data)
-        print data
-        try:
-            print "Length: %d" %(data.buffer_info()[1])
-        except:
-            try:
-                print "Length: %d" %(len(data))
-            except:
-                pass
-    
-    def _print_decoded_header(self, data):
-        '''Decodes the provided header and prints it for debugging purposes'''
-        print self.decode_header(data)
           
     def _get_bin_id(self, ads_id):
         '''Converts an ams id string into a binary form'''
@@ -123,17 +124,17 @@ class _ads_packet:
                 errmesg= 'PLC returned non zero error code: %d ' %(err_code)
             print '\n', errmesg
             print 'The header of the transmitted package was:'
-            self._print_decoded_header(self.packet)
+            _print_decoded_header(self.packet)
             print 'The command header was:'
-            self._print_data(cmd.cmd_header)
+            _print_data(cmd.cmd_header)
             print 'The command payload was:'
-            self._print_data(cmd.cmd_payload)
+            _print_data(cmd.cmd_payload)
             
             print 'The header of the received package was:'
             print rec_header
             raise RuntimeError(errmesg)
 
-class _single_cmd_packet(_ads_packet):
+class cmd_packet(_ads_packet):
     def __init__(self):
         _ads_packet.__init__(self)
         # Saves the command header
@@ -176,7 +177,7 @@ class _single_cmd_packet(_ads_packet):
         self.packet.extend(payload)
         return self.packet
     
-class _sum_cmd_packet(_ads_packet):
+class sum_cmd_packet(_ads_packet):
     '''Generate one sum command packet from a series of single command'''
     def __init__(self):
         _ads_packet.__init__(self)
@@ -239,9 +240,9 @@ class _sum_cmd_packet(_ads_packet):
             offset+=lenght
         return results
         
-class ads_sum_cmd_rw(_sum_cmd_packet):
+class ads_sum_cmd_rw(sum_cmd_packet):
     def __init__(self):
-        _sum_cmd_packet.__init__(self)
+        sum_cmd_packet.__init__(self)
         self.idx_grp=idx_grp['SUM_CMD_RW']
         self.decoderheader='LL'
 
@@ -251,9 +252,9 @@ class ads_sum_cmd_rw(_sum_cmd_packet):
         cmd=ads_cmd_read_write(idx_group, idx_offset, read_datatype, write_data)
         self.cmdlist.append(cmd)
         
-class ads_sum_cmd_read(_sum_cmd_packet):
+class ads_sum_cmd_read(sum_cmd_packet):
     def __init__(self):
-        _sum_cmd_packet.__init__(self)
+        sum_cmd_packet.__init__(self)
         self.idx_grp=idx_grp['SUM_CMD_READ']
         self.decoderheader='L'
 
@@ -263,9 +264,9 @@ class ads_sum_cmd_read(_sum_cmd_packet):
         cmd=ads_cmd_read(idx_grp, idx_offset, data_type)
         self.cmdlist.append(cmd)
 
-class ads_sum_cmd_write(_sum_cmd_packet):
+class ads_sum_cmd_write(sum_cmd_packet):
     def __init__(self):
-        _sum_cmd_packet.__init__(self)
+        sum_cmd_packet.__init__(self)
         self.idx_grp=idx_grp['SUM_CMD_WRITE']
         self.decoderheader='L'
         
@@ -276,17 +277,17 @@ class ads_sum_cmd_write(_sum_cmd_packet):
         self.cmdlist.append(cmd)
 
 
-class ads_cmd_read_dev_info(_single_cmd_packet):
+class ads_cmd_read_dev_info(cmd_packet):
     '''Provides a packet and decoder functionality for the "ADS Read Device Info" command'''
     def __init__(self):
         '''Generate the request packet'''
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         self.command_id=cmd_codes['read_dev_info']
         self.state_flag=state_flags['command_request']
         
     def decode_response(self, response):
         '''Decode the returned response '''
-        result, payload=self.decode_header(response)
+        result, payload=decode_ads_header(response)
         dec_payload=struct.unpack('<LBBH16s', payload)
         result['result']= dec_payload[0]
         result['major_ver']= dec_payload[1]
@@ -295,12 +296,12 @@ class ads_cmd_read_dev_info(_single_cmd_packet):
         result['dev_name']= dec_payload[4]
         return result
    
-class ads_cmd_read(_single_cmd_packet):
+class ads_cmd_read(cmd_packet):
     '''Provides a packet and decoder functionality for the "ADS Read" command'''
     #Usage: Instanciate, get assembled packet, call decode response to decode PLC response'''
     def __init__(self, idx_grp, idx_offset, data_type):
         '''Generate the request packet'''
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         self.command_id=cmd_codes['read']
         self.state_flag=state_flags['command_request']
         self.add_var(idx_grp, idx_offset, data_type)
@@ -315,18 +316,18 @@ class ads_cmd_read(_single_cmd_packet):
 
     def decode_response(self, response):
         '''Decode the returned response '''
-        result, payload=self.decode_header(response)
+        result, payload=decode_ads_header(response)
         dec_payload=struct.unpack('<LL' + self.decoderstring, payload)
         result['result']=dec_payload[0]
         result['data_length']=dec_payload[1]
         result['data']=dec_payload[2:]
         return result
 
-class ads_cmd_write(_single_cmd_packet):
+class ads_cmd_write(cmd_packet):
     '''Provides a packet and decoder functionality for the "ADS Write" command'''
     def __init__(self, idx_grp, idx_offset, data_type, data):
         '''Generate the request packet'''
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         self.command_id=cmd_codes['write']
         self.state_flag=state_flags['command_request']
         self.add_var(idx_grp, idx_offset, data_type, data)
@@ -345,31 +346,31 @@ class ads_cmd_write(_single_cmd_packet):
         
     def decode_response(self, response):
         '''Decode the returned response '''
-        result, payload=self.decode_header(response)
+        result, payload=decode_ads_header(response)
         dec_payload=struct.unpack('<L', payload)
         result['result']= dec_payload[0]
         return result
 
-class ads_cmd_read_state(_single_cmd_packet):
+class ads_cmd_read_state(cmd_packet):
     def __init__(self):
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         self.command_id=cmd_codes['read_state']
         self.state_flag=state_flags['command_request']
          
     def decode_response(self, response):
         '''Decode the returned response '''
-        result, payload=self.decode_header(response)
+        result, payload=decode_ads_header(response)
         dec_payload=struct.unpack('<LHH', payload)
         result['result']=dec_payload[0]
         result['ads_state']= dec_payload[1]
         result['dev_state']=dec_payload[2]
         return result
 
-class ads_cmd_write_ctrl(_single_cmd_packet):
+class ads_cmd_write_ctrl(cmd_packet):
     #TODO: Test this
     def __init__(self, ads_socket, ads_state, dev_state, data):
         '''Performs the write control command (whatever that is) Data must be provided as array('c')'''
-        _single_cmd_packet.__init__(self, ads_socket)
+        cmd_packet.__init__(self, ads_socket)
         self.command_id=cmd_codes['write_control']
         self.state_flag=state_flags['command_request']
         lenght=data.itemsize        
@@ -384,11 +385,11 @@ class ads_cmd_write_ctrl(_single_cmd_packet):
         result['result']=dec_payload[0]
         return result
 
-class ads_cmd_add_dev_notif(_single_cmd_packet):
+class ads_cmd_add_dev_notif(cmd_packet):
     #TODO: Test this
     def __init__(self, ads_socket, idx_group, idx_offset, lenght, transm_mode, max_delay, cycle_time):
         '''Performs the write control command (whatever that is) Data must be provided as array('c')'''
-        _single_cmd_packet.__init__(self, ads_socket)
+        cmd_packet.__init__(self, ads_socket)
         self.command_id=cmd_codes['add_dev_notification']
         self.state_flag=state_flags['command_request']
         self.payload=struct.pack('<LLLLLL',idx_group, idx_offset, lenght, transm_mode, max_delay, cycle_time) # Assemble the payload to be send to the plc
@@ -402,11 +403,11 @@ class ads_cmd_add_dev_notif(_single_cmd_packet):
         result['notif_handle']=struct.unpack('<L', payload[4:8])
         return result   
 
-class ads_cmd_del_dev_notif(_single_cmd_packet):
+class ads_cmd_del_dev_notif(cmd_packet):
     #TODO: Test this
     def __init__(self, ads_socket, notif_handle):
         '''Performs the write control command (whatever that is) Data must be provided as array('c')'''
-        _single_cmd_packet.__init__(self, ads_socket)
+        cmd_packet.__init__(self, ads_socket)
         self.command_id=cmd_codes['del_dev_notification']
         self.state_flag=state_flags['command_request']
         self.payload=struct.pack('<L',notif_handle) # Assemble the payload to be send to the plc
@@ -419,15 +420,15 @@ class ads_cmd_del_dev_notif(_single_cmd_packet):
         result['result']=dec_payload[0]
         return result
 
-class ads_cmd_dev_notif(_single_cmd_packet):
+class ads_cmd_dev_notif(cmd_packet):
     # TODO: Implement this!
     def __init__(self):
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         pass
 
-class ads_cmd_read_write(_single_cmd_packet):
+class ads_cmd_read_write(cmd_packet):
     def __init__(self, idx_group, idx_offset, read_datatype, write_data):
-        _single_cmd_packet.__init__(self)
+        cmd_packet.__init__(self)
         self.command_id=cmd_codes['read_write']
         self.state_flag=state_flags['command_request']
         write_buf=array.array('c')
@@ -442,7 +443,7 @@ class ads_cmd_read_write(_single_cmd_packet):
     
     def _decode_cmd_header(self, response):
         '''Decodes the command header of the returned packet'''
-        result, payload=self.decode_header(response)
+        result, payload=decode_ads_header(response)
         dec_payload=struct.unpack('<LL', payload[0:8])
         result['result']=dec_payload[0]
         result['data_lenght']=dec_payload[1]
@@ -455,6 +456,6 @@ class ads_cmd_read_write(_single_cmd_packet):
         try:
             result['data']=struct.unpack('<'+self.decoderstring, payload)
         except:
-            self._print_data(payload)
+            _print_data(payload)
             raise
         return result
