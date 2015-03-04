@@ -9,7 +9,9 @@ Limitations
 -----------
 
 ADSHLI uses TCP/IP to connect to the Twincat AMS/ADS router. Beckhoff currently limits (for whatever reason) the number of available AMS/ADS routes via TCP/IP to one per IP address. If you need more than one connection there are two possibilities to overcome the issue:
+
 1. If you are on Windows, you may use another library using a transport protocol not subjected to the abovementioned limitation. Pyads seems to be a good option for python here.
+
 2. You put a second, unlimited ads router that does ADS network address translation (NAT) in front of the crippled Beckhoff router. I've implemented something like that in adsnat2.py. Note that it is currently limited to one AMS/ADS port per IP, but you can easily change that.
 
 Usage
